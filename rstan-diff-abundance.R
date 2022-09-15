@@ -10,6 +10,13 @@ gt_data <- read_qza("../../Reisdorph/GT-micro-metabo/microbiome/table_GT.qza")$d
     as.data.frame() %>%
     t() %>% as.data.frame()
 
+# only grab a few of the columns since we're testing stan
+total_reads <- sum(gt_data)
+microbe_read_sums <- colSums(gt_data)
+sum(microbe_read_sums > 0.005*total_reads) # 29 microbes have > 0.5% of the total reads
+gt_data <- gt_data[,which(microbe_read_sums > 0.005*total_reads)]
+
+
 # read in metadata
 metadata <- data.table::fread("../../Reisdorph/GT-micro-metabo/metadata/mapping.tsv") %>%
     as.data.frame()
@@ -50,6 +57,16 @@ stan_data <- list(
     p=p,
     depth=depth,
     X=X,
-    y=y,
+    y=y
 )
 
+
+fit1 <- stan(
+    file = "diff-abund-NB.stan",  # Stan program
+    data = stan_data,    # named list of data
+    chains = 4,             # number of Markov chains
+    warmup = 500,          # number of warmup iterations per chain
+    iter = 1000,            # total number of iterations per chain
+    cores = 4,              # number of cores (could use one per chain)
+    refresh = 1             # progress shown
+)
