@@ -40,7 +40,7 @@ N <- nrow(gt_data)
 D <- ncol(gt_data)
 
 # Create the predictor vector
-X <- model.matrix(~Germ_free, data=cbind(gt_data, metadata)) %>% 
+x <- model.matrix(~Germ_free, data=cbind(gt_data, metadata)) %>% 
     as.data.frame()
 p <- ncol(X-1) #subtract 1 bc of the intercept
 
@@ -56,7 +56,7 @@ stan_data <- list(
     D=D,
     p=p,
     depth=depth,
-    X=X,
+    x=x,
     y=y
 )
 
@@ -70,3 +70,40 @@ fit1 <- stan(
     cores = 4,              # number of cores (could use one per chain)
     refresh = 1             # progress shown
 )
+
+# assess sampler params
+sampler_params <- get_sampler_params(fit1, inc_warmup = TRUE)
+summary(do.call(rbind, sampler_params), digits = 2)
+
+
+# print some of the output params, phi and beta
+print(fit1, pars = c("phi", "beta"))
+plot(fit1, pars=c("beta"))
+
+# extract betas from the model
+model_betas <- rstan::extract(fit1)$beta[,2,]
+dim(model_betas)
+
+# create a function to convert from alr to clr for interpretation
+alr2clr <- function(x){
+    d <- nrow(x)
+    zeros <- matrix(0, nrow=d, ncol=1)
+    mat <- cbind(x, zeros)
+    x_clr <- mat - rowMeans(mat)
+    return(x_clr)
+}
+
+model_betas_clr <- alr2clr(model_betas)
+
+# check that this does the same as using alrInv to clr
+# either of these options should work
+model_betas_clr2 <- compositions::alrInv(model_betas) %>% compositions::clr()
+rbind(model_betas_clr[1,],
+      model_betas_clr2[1,])
+
+model_betas_clr <- model_betas_clr %>% as.data.frame()
+colnames(model_betas_clr) <- colnames(gt_data)
+
+
+
+traceplot(fit1, pars = c("beta"), inc_warmup = TRUE, nrow = 29)
