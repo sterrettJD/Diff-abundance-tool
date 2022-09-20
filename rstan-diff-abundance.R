@@ -225,7 +225,7 @@ ggplot(beta_plot_data2,
     ylab("Genus") +
     xlab("Log(Germ Free/Control) + K")
 
-genus_metadata_df <- cbind(gt_data2/depth, metadata)
+genus_metadata_df <- cbind(gt_data2, metadata)
 for(genus in head(beta_plot_data2$tax)){
     p <- ggplot(data=genus_metadata_df,
            mapping=aes(x=Germ_free, y=genus_metadata_df[,genus])) +
@@ -244,3 +244,10 @@ for(genus in tail(beta_plot_data2$tax)){
     print(p)
 }
 
+p <- ggplot(data=cbind(genus_metadata_df, depth),
+            mapping=aes(x=Germ_free, y=depth)) +
+    geom_violin() +
+    geom_jitter(width = 0.1) +
+    ylab("Number of reads") +
+    ylim(0,90000)
+p
