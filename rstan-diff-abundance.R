@@ -224,3 +224,23 @@ ggplot(beta_plot_data2,
     theme(axis.text.y=element_blank()) +
     ylab("Genus") +
     xlab("Log(Germ Free/Control) + K")
+
+genus_metadata_df <- cbind(gt_data2/depth, metadata)
+for(genus in head(beta_plot_data2$tax)){
+    p <- ggplot(data=genus_metadata_df,
+           mapping=aes(x=Germ_free, y=genus_metadata_df[,genus])) +
+        geom_violin() +
+        geom_point() +
+        ylab(genus)
+    print(p)
+}
+
+for(genus in tail(beta_plot_data2$tax)){
+    p <- ggplot(data=genus_metadata_df,
+                mapping=aes(x=Germ_free, y=genus_metadata_df[,genus])) +
+        geom_violin() +
+        geom_point() +
+        ylab(genus)
+    print(p)
+}
+
