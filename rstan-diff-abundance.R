@@ -75,14 +75,12 @@ fit1 <- stan(
 sampler_params <- get_sampler_params(fit1, inc_warmup = TRUE)
 summary(do.call(rbind, sampler_params), digits = 2)
 
-summary(fit1)
-
 # print some of the output params, phi and beta
-print(fit1, pars = c("phi", "beta"))
-plot(fit1, pars=c("beta"))
+#print(fit1, pars = c("phi", "beta"))
+#plot(fit1, pars=c("beta"))
 
 # extract betas from the model
-model_betas <- rstan::extract(fit1)$beta[,2,]
+model_betas <- rstan::extract(fit1, permuted=T)$beta[,2,]
 dim(model_betas)
 
 # create a function to convert from alr to clr for interpretation
@@ -147,19 +145,82 @@ head(beta_plot_data)
 tail(beta_plot_data)
 
 
+fit1_summary <- summary(fit1, probs=c(.025, .975), digits=3)
+
+### - genus table ###########
+
+# read in qiime count table
+gt_data2 <- read_qza("../../Reisdorph/GT-micro-metabo/microbiome/L6_table_GT.qza")$data %>%
+    as.data.frame() %>%
+    t() %>% as.data.frame()
+
+# model inputs
+formula <- "Germ_free"
+N <- nrow(gt_data2)
+D <- ncol(gt_data2)
+
+# Create the predictor vector
+x <- model.matrix(~Germ_free, data=cbind(gt_data2, metadata)) %>% 
+    as.data.frame()
+p <- ncol(x-1) #subtract 1 bc of the intercept
+
+# calculate sequencing depth for each sample
+depth <- gt_data2 %>% rowSums()
+
+# The count table is our outcome y
+y <- gt_data2
+
+#concatenate to a named list for stan
+stan_data2 <- list(
+    N=N,
+    D=D,
+    p=p,
+    depth=depth,
+    x=x,
+    y=y
+)
 
 
+fit2 <- stan(
+    file = "diff-abund-NB.stan",  # Stan program
+    data = stan_data2,    # named list of data
+    chains = 4,# number of Markov chains
+    warmup = 500,          # number of warmup iterations per chain
+    iter = 2000,            # total number of iterations per chain
+    cores = 4,# number of cores (could use one per chain)
+    refresh = 1, # progress shown
+)
 
 
-long_betas <- pivot_longer(model_betas_clr, cols = everything())
-long_betas$nameshort <- long_betas$name %>% sapply(function(x){str_split(x, pattern=";", n=4)[[1]][4]})
+# assess sampler params
+sampler_params2 <- get_sampler_params(fit2, inc_warmup = TRUE)
+summary(do.call(rbind, sampler_params2), digits = 2)
 
-ggplot(data=long_betas,
-       mapping=aes(y=nameshort, x=value)) +
-    geom_boxplot()
+# extract betas from the model
+model_betas2 <- rstan::extract(fit2, permuted=T)$beta[,2,]
+dim(model_betas2)
+
+model_betas_clr2 <- alr2clr(model_betas2) %>% as.data.frame()
+colnames(model_betas_clr2) <- colnames(gt_data2)
 
 
+microbe_beta_means2 <- colMeans(model_betas_clr2)
+microbe_beta_sd2 <- apply(model_betas_clr2, 2, sd)
 
+beta_plot_data2 <- data.frame(
+    mean=microbe_beta_means2, sd=microbe_beta_sd2, 
+    row.names=colnames(model_betas_clr2))
 
+beta_plot_data2$tax <- colnames(model_betas_clr2)
+beta_plot_data2 <- beta_plot_data2[order(beta_plot_data2$mean),]
 
-
+pd <- position_dodge(0.1)
+ggplot(beta_plot_data2,
+       aes(y=reorder(tax,mean), x=mean)) +
+    geom_point(position=pd, stat="identity",
+               colour='red') +
+    geom_errorbar(aes(xmin=mean-sd, xmax=mean+sd),
+                  position=pd, alpha=0.2) +
+    theme(axis.text.y=element_blank()) +
+    ylab("Genus") +
+    xlab("Log(Germ Free/Control) + K")
